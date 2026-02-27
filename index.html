@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIFELINE | Low-Bandwidth Network</title>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        /* --- CSS: BRUTALIST & LIGHTWEIGHT --- */
+        :root {
+            --alert-red: #d32f2f;
+            --safe-green: #388e3c;
+            --bg-color: #fcfcfc;
+            --text-color: #111;
+        }
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 15px;
+            border-left: 1px solid #ddd;
+            border-right: 1px solid #ddd;
+            min-height: 100vh;
+        }
+        
+        /* HEADER */
+        header {
+            border-bottom: 2px solid var(--alert-red);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        h1 { margin: 0; font-size: 1.8rem; letter-spacing: -1px; cursor: pointer; }
+        .status-bar {
+            background: #eee;
+            font-size: 0.8rem;
+            padding: 4px 8px;
+            margin-top: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* NAVIGATION & VIEWS */
+        .view { display: none; }
+        .active-view { display: block; }
+
+        /* BUTTONS */
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+            border: 2px solid #000;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+        .btn-sos { background-color: var(--alert-red); color: white; border: none; }
+        .btn-safe { background-color: var(--safe-green); color: white; border: none; }
+        .btn-admin { background-color: #333; color: white; border: none; padding: 10px; font-size: 0.9rem;}
+        .btn-back { background-color: #ddd; border: none; padding: 10px; font-size: 0.9rem;}
+
+        /* FORMS */
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            box-sizing: border-box;
+            border: 1px solid #999;
+            font-family: inherit;
+        }
+        .geo-tag {
+            font-size: 0.8rem;
+            color: var(--alert-red);
+            margin-top: 5px;
+            cursor: pointer;
+        }
+
+        /* FEED ITEMS */
+        .feed-item {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #fff;
+        }
+        .feed-time { font-size: 0.7rem; color: #666; }
+        .tag { 
+            display: inline-block; padding: 2px 6px; font-size: 0.7rem; color: white; 
+            margin-right: 5px;
+        }
+        .tag-medical { background: var(--alert-red); }
+        .tag-food { background: orange; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <header>
+        <h1 onclick="navigate('home')">LIFELINE SYSTEM</h1>
+        <div class="status-bar">
+            <span id="network-status">📶 Connected to Cloud</span>
+            <span id="battery-status">🔋 Saver Mode</span>
+        </div>
+    </header>
+
+    <div id="home" class="view active-view">
+        <p><strong>EMERGENCY PROTOCOL ACTIVE.</strong> Images disabled to save bandwidth.</p>
+        
+        <button class="btn btn-sos" onclick="navigate('sos-form')">🚨 REQUEST RESCUE</button>
+        <button class="btn btn-safe" onclick="navigate('feed')">📋 VIEW LIVE FEED</button>
+        <button class="btn btn-admin" onclick="navigate('admin-form')">👨‍💻 ADMIN: POST UPDATE</button>
+        
+        <h3>Live Local Updates:</h3>
+        <div id="updates-container">
+            <p style="font-size: 0.8rem; color: #666;">Waiting for server updates...</p>
+        </div>
+    </div>
+
+    <div id="sos-form" class="view">
+        <button class="btn btn-back" onclick="navigate('home')">← Back</button>
+        <h2>SEND DISTRESS SIGNAL</h2>
+        
+        <form onsubmit="submitSOS(event)">
+            <label>Name / Count:</label>
+            <input type="text" id="victim-name" placeholder="e.g., Yash + 3 others" required>
+
+            <label>Urgency:</label>
+            <select id="urgency">
+                <option value="medical">Medical Emergency (Critical)</option>
+                <option value="trap">Trapped / Water Rising</option>
+                <option value="food">Need Food/Water</option>
+            </select>
+
+            <label>Location (GPS):</label>
+            <input type="text" id="gps-loc" placeholder="Fetching satellites..." readonly>
+            <div class="geo-tag" onclick="getLocation()">[Click to Retry GPS]</div>
+
+            <label>Details:</label>
+            <textarea id="details" rows="3" placeholder="Describe situation..."></textarea>
+
+            <button type="submit" class="btn btn-sos" style="margin-top:20px;">TRANSMIT TO SERVER</button>
+        </form>
+    </div>
+
+    <div id="feed" class="view">
+        <button class="btn btn-back" onclick="navigate('home')">← Back</button>
+        <h2>LIVE RESCUE FEED</h2>
+        <div id="feed-container">
+            <p>Syncing with cloud...</p>
+        </div>
+    </div>
+
+    <div id="admin-form" class="view">
+        <button class="btn btn-back" onclick="navigate('home')">← Back</button>
+        <h2>POST ADMIN UPDATE</h2>
+        <p style="font-size: 0.8rem;">Broadcast a message to all users instantly.</p>
+        
+        <form onsubmit="submitAdminUpdate(event)">
+            <label>Official Update Message:</label>
+            <textarea id="admin-message" rows="4" placeholder="e.g., PCU Campus Shelter Open at Gate 2." required></textarea>
+
+            <button type="submit" class="btn btn-safe" style="margin-top:20px;">BROADCAST UPDATE</button>
+        </form>
+    </div>
+
+</div>
+
+<script>
+    // --- 2. FIREBASE CONFIGURATION ---
+    // Here are your real keys cleanly injected into the v8 setup
+    const firebaseConfig = {
+        apiKey: "AIzaSyCQGnLEsNWRJFyRNJuSCSzJJrTZhYqocaY",
+        authDomain: "rescue-signal-transmitter.firebaseapp.com",
+        databaseURL: "https://rescue-signal-transmitter-default-rtdb.firebaseio.com",
+        projectId: "rescue-signal-transmitter",
+        storageBucket: "rescue-signal-transmitter.firebasestorage.app",
+        messagingSenderId: "532087098081",
+        appId: "1:532087098081:web:e3a17c48e64d913ca185a0"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // --- 3. NAVIGATION LOGIC ---
+    function navigate(viewId) {
+        document.querySelectorAll('.view').forEach(el => el.classList.remove('active-view'));
+        document.getElementById(viewId).classList.add('active-view');
+        if(viewId === 'sos-form') getLocation();
+    }
+
+    // --- 4. GPS LOGIC ---
+    function getLocation() {
+        const gpsField = document.getElementById('gps-loc');
+        gpsField.value = "Triangulating...";
+        
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    gpsField.value = `${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`;
+                    gpsField.style.borderColor = "green";
+                },
+                (error) => {
+                    gpsField.value = "GPS Failed. Enter Manually.";
+                }
+            );
+        } else {
+            gpsField.value = "GPS not supported.";
+        }
+    }
+
+    // --- 5. SENDING DATA TO CLOUD ---
+    function submitSOS(e) {
+        e.preventDefault();
+
+        const report = {
+            name: document.getElementById('victim-name').value,
+            urgency: document.getElementById('urgency').value,
+            location: document.getElementById('gps-loc').value,
+            details: document.getElementById('details').value,
+            time: new Date().toLocaleTimeString(),
+            timestamp: Date.now() 
+        };
+
+        db.ref('sos_reports').push(report)
+            .then(() => {
+                alert("SIGNAL TRANSMITTED TO CLOUD SUCCESSFULLY");
+                document.getElementById('victim-name').value = ''; 
+                document.getElementById('details').value = ''; 
+                navigate('feed'); 
+            })
+            .catch((error) => {
+                alert("Transmission failed: " + error.message);
+            });
+    }
+
+    function submitAdminUpdate(e) {
+        e.preventDefault();
+
+        const updateData = {
+            message: document.getElementById('admin-message').value,
+            time: new Date().toLocaleTimeString(),
+            timestamp: Date.now()
+        };
+
+        db.ref('admin_updates').push(updateData)
+            .then(() => {
+                alert("UPDATE BROADCASTED TO ALL DEVICES");
+                document.getElementById('admin-message').value = '';
+                navigate('home');
+            });
+    }
+
+    // --- 6. REAL-TIME CLOUD LISTENERS ---
+    db.ref('sos_reports').orderByChild('timestamp').on('value', (snapshot) => {
+        const container = document.getElementById('feed-container');
+        container.innerHTML = ""; 
+
+        const reports = [];
+        snapshot.forEach((child) => {
+            reports.unshift(child.val()); 
+        });
+
+        if(reports.length === 0) {
+            container.innerHTML = "<p>No distress signals active.</p>";
+            return;
+        }
+
+        reports.forEach(r => {
+            let colorClass = r.urgency === 'medical' || r.urgency === 'trap' ? 'tag-medical' : 'tag-food';
+            const card = `
+                <div class="feed-item">
+                    <div class="feed-time">${r.time}</div>
+                    <div><span class="tag ${colorClass}">${r.urgency.toUpperCase()}</span> <strong>${r.name}</strong></div>
+                    <div style="font-size:0.9rem; margin-top:5px;">📍 ${r.location}</div>
+                    ${r.details ? `<div style="font-size:0.8rem; margin-top:5px; color:#555;">Details: ${r.details}</div>` : ''}
+                </div>
+            `;
+            container.innerHTML += card;
+        });
+    });
+
+    db.ref('admin_updates').orderByChild('timestamp').on('value', (snapshot) => {
+        const container = document.getElementById('updates-container');
+        container.innerHTML = ""; 
+
+        const updates = [];
+        snapshot.forEach((child) => {
+            updates.unshift(child.val()); 
+        });
+
+        if(updates.length === 0) {
+            container.innerHTML = "<p style='font-size: 0.8rem; color: #666;'>No active updates.</p>";
+            return;
+        }
+
+        updates.forEach(u => {
+            const card = `
+                <div class="feed-item" style="border-left: 3px solid var(--alert-red);">
+                    <div class="feed-time">${u.time} - ADMIN</div>
+                    <strong>${u.message}</strong>
+                </div>
+            `;
+            container.innerHTML += card;
+        });
+    });
+
+</script>
+</body>
+</html>
